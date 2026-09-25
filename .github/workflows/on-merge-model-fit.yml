@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - release-*
+      # release-train-* branches publish from release-train.yml.
+      - "!release-train-*"
     paths:
       - "packages/model-fit/**"
       - ".github/workflows/*model-fit*.yml"
