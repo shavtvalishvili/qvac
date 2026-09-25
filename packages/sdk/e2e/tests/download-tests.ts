@@ -1,3 +1,4 @@
+// Download resilience, and why this file stays on its executors.
 import type { TestDefinition } from '@qvac/test-suite'
 
 export const downloadCancelIsolation: TestDefinition = {
@@ -32,3 +33,13 @@ export const downloadHuggingFaceVerify: TestDefinition = {
 }
 
 export const downloadTests = [downloadCancelIsolation, downloadHuggingFaceVerify]
+
+/** Not runnable on the Python client yet. */
+for (const test of downloadTests) {
+  if (test.steps || test.skip) continue
+  test.skip = {
+    reason:
+      'the Python client has no body for this: it drives network faults through local HTTP fixtures, which the Python client needs a hand-written body for before this can run there',
+    platforms: ['desktop-python']
+  }
+}

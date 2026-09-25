@@ -1,4 +1,4 @@
-import type { TestDefinition } from '@qvac/test-suite'
+import type { Step, TestDefinition } from '@qvac/test-suite'
 
 /**
  * End-to-end coverage for registry-download configuration plumbing.
@@ -14,12 +14,21 @@ import type { TestDefinition } from '@qvac/test-suite'
  * those values in effect.
  */
 
+/** The download path, driven with the fixture's retries/timeout in effect. */
+const downloadSmokeSteps: Step[] = [
+  { modelSource: { dep: 'whisper', as: 'src' } },
+  { call: { method: 'downloadAsset', params: { assetSrc: '$src.modelSrc' }, as: 'downloaded' } },
+  { project: { from: '$downloaded', path: 'path', as: 'path' } },
+  { assert: { on: '$path', named: 'nonEmptyText' } }
+]
+
 export const configRegistryDownloadSmoke: TestDefinition = {
   testId: 'config-registry-download-smoke',
   params: {},
   // expectation is validated inside the executor
   expectation: { validation: 'function', fn: () => true },
   suites: ['smoke'],
+  steps: downloadSmokeSteps,
   metadata: {
     category: 'config',
     dependency: 'none',
@@ -27,6 +36,7 @@ export const configRegistryDownloadSmoke: TestDefinition = {
   }
 }
 
+/** Not migrated, and the reason is worth reading before someone tries. */
 export const configRegistryDownloadRespectsCancel: TestDefinition = {
   testId: 'config-registry-download-respects-cancel',
   params: {},

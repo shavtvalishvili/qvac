@@ -1,5 +1,5 @@
 // Real SDK tests
-import type { TestDefinition } from '@qvac/test-suite'
+import type { Step, TestDefinition } from '@qvac/test-suite'
 import { batchCompletionTests } from './batch-completion-tests.js'
 import { completionTests } from './completion-tests.js'
 import { transcriptionTests } from './transcription-tests.js'
@@ -46,12 +46,37 @@ import { pluginTests } from './plugin-tests.js'
 import { snapStorageTests } from './snap-storage-tests.js'
 import { systemResourcesTests } from './system-resources-tests.js'
 
+/** Loading the resource behind a key IS the load test. */
+const loadsResource = (dep: string): Step[] => [
+  { useModel: { deps: [dep], as: 'modelId' } },
+  { assert: { on: '$modelId', use: 'expectation' } }
+]
+
+/** `loadModel` driven directly, with the source taken from the resource table. */
+const loadsWithConfig = (dep: string, modelConfig: Record<string, unknown>): Step[] => [
+  { modelSource: { dep, as: 'src' } },
+  {
+    call: {
+      method: 'loadModel',
+      params: {
+        modelSrc: '$src.modelSrc',
+        modelType: '$src.modelType',
+        modelConfig
+      },
+      as: 'loaded'
+    }
+  },
+  { project: { from: '$loaded', path: 'modelId', as: 'modelId' } },
+  { assert: { on: '$modelId', use: 'expectation' } }
+]
+
 // Model loading tests
 export const modelLoadLlm: TestDefinition = {
   testId: 'model-load-llm',
   params: {},
   expectation: { validation: 'type', expectedType: 'string' },
   suites: ['smoke'],
+  steps: loadsResource('llm'),
   metadata: {
     category: 'model',
     dependency: 'none',
@@ -63,6 +88,7 @@ export const modelLoadLlmLoadModeNone: TestDefinition = {
   testId: 'model-load-llm-load-mode-none',
   params: { loadMode: 'none' },
   expectation: { validation: 'type', expectedType: 'string' },
+  steps: loadsWithConfig('llm', { verbosity: 0, ctx_size: 2048, load_mode: '$params.loadMode' }),
   metadata: {
     category: 'model',
     dependency: 'none',
@@ -75,6 +101,30 @@ export const modelLoadLlmLegacyNoMmapRejected: TestDefinition = {
   testId: 'model-load-llm-legacy-no-mmap-rejected',
   params: { noMmap: true },
   expectation: { validation: 'throws-error', errorContains: '50010' },
+  steps: [
+    { modelSource: { dep: 'llm', as: 'src' } },
+    {
+      callError: {
+        method: 'loadModel',
+        params: {
+          modelSrc: '$src.modelSrc',
+          modelType: '$src.modelType',
+          modelConfig: { no_mmap: '$params.noMmap' }
+        },
+        as: 'err'
+      }
+    },
+    // The code is on the error, not in its message -- and a native --no-mmap complaint would mean
+    // the key reached the addon instead of failing SDK validation, which is the regression this
+    // test exists for.
+    {
+      assert: {
+        on: '$err',
+        named: 'errorMatches',
+        with: { code: '50010', messageNotMatching: 'invalid argument|--no-mmap' }
+      }
+    }
+  ],
   metadata: {
     category: 'model',
     dependency: 'none',
@@ -87,6 +137,7 @@ export const modelLoadEmbedding: TestDefinition = {
   params: {},
   expectation: { validation: 'type', expectedType: 'string' },
   suites: ['smoke'],
+  steps: loadsResource('embeddings'),
   metadata: {
     category: 'model',
     dependency: 'none',
@@ -99,6 +150,7 @@ export const modelLoadOcr: TestDefinition = {
   params: {},
   expectation: { validation: 'type', expectedType: 'string' },
   suites: ['smoke'],
+  steps: loadsResource('ocr'),
   metadata: {
     category: 'model',
     dependency: 'none',
@@ -116,6 +168,7 @@ export const modelLoadOcrDoctr: TestDefinition = {
   params: {},
   expectation: { validation: 'type', expectedType: 'string' },
   suites: ['smoke'],
+  steps: loadsResource('doctr'),
   metadata: {
     category: 'model',
     dependency: 'none',
@@ -134,6 +187,17 @@ export const modelLoadInvalid: TestDefinition = {
     errorContains: 'failed to locate'
   },
   suites: ['smoke'],
+  steps: [
+    {
+      callError: {
+        method: 'loadModel',
+        params: { modelSrc: '$params.modelPath', modelType: '$params.modelType' },
+        as: 'err'
+      }
+    },
+    { project: { from: '$err', path: 'message', as: 'message' } },
+    { assert: { on: '$message', use: 'expectation' } }
+  ],
   metadata: {
     category: 'model',
     dependency: 'none',
@@ -146,6 +210,17 @@ export const modelUnload: TestDefinition = {
   params: { shouldClearStorage: false },
   expectation: { validation: 'type', expectedType: 'string' },
   suites: ['smoke'],
+  steps: [
+    { useModel: { deps: ['llm'], as: 'modelId' } },
+    {
+      call: {
+        method: 'unloadModel',
+        params: { modelId: '$modelId', clearStorage: '$params.shouldClearStorage' },
+        as: 'unloaded'
+      }
+    },
+    { assert: { on: '$modelId', use: 'expectation' } }
+  ],
   metadata: { category: 'model', dependency: 'llm', estimatedDurationMs: 5000 }
 }
 
@@ -159,6 +234,12 @@ export const modelLoadConcurrent: TestDefinition = {
   },
   expectation: { validation: 'type', expectedType: 'array' },
   suites: ['smoke'],
+  steps: [
+    // The executor loaded the two in a loop; `useModel` with two deps is the same sequence through
+    // the same table.
+    { useModel: { deps: ['llm', 'embeddings'], as: 'modelIds' } },
+    { assert: { on: '$modelIds', use: 'expectation' } }
+  ],
   metadata: {
     category: 'model',
     dependency: 'none',
@@ -171,6 +252,7 @@ export const modelReloadLlm: TestDefinition = {
   testId: 'model-reload-llm',
   params: {},
   expectation: { validation: 'type', expectedType: 'string' },
+  steps: loadsResource('llm'),
   metadata: {
     category: 'model',
     dependency: 'llm',
@@ -182,6 +264,24 @@ export const modelSwitchLlm: TestDefinition = {
   testId: 'model-switch-llm',
   params: {},
   expectation: { validation: 'type', expectedType: 'string' },
+  steps: [
+    { useModel: { deps: ['llm'], as: 'first' } },
+    { call: { method: 'unloadModel', params: { modelId: '$first' }, as: 'unloaded' } },
+    { modelSource: { dep: 'llm', as: 'src' } },
+    {
+      call: {
+        method: 'loadModel',
+        params: {
+          modelSrc: '$src.modelSrc',
+          modelType: '$src.modelType',
+          modelConfig: { verbosity: 0, ctx_size: 2048 }
+        },
+        as: 'loaded'
+      }
+    },
+    { project: { from: '$loaded', path: 'modelId', as: 'modelId' } },
+    { assert: { on: '$modelId', use: 'expectation' } }
+  ],
   metadata: {
     category: 'model',
     dependency: 'llm',
@@ -193,6 +293,24 @@ export const modelReloadAfterError: TestDefinition = {
   testId: 'model-reload-after-error',
   params: {},
   expectation: { validation: 'type', expectedType: 'string' },
+  steps: [
+    { useModel: { deps: ['llm'], as: 'first' } },
+    { call: { method: 'unloadModel', params: { modelId: '$first' }, as: 'unloaded' } },
+    { modelSource: { dep: 'llm', as: 'src' } },
+    {
+      call: {
+        method: 'loadModel',
+        params: {
+          modelSrc: '$src.modelSrc',
+          modelType: '$src.modelType',
+          modelConfig: { verbosity: 0, ctx_size: 2048 }
+        },
+        as: 'loaded'
+      }
+    },
+    { project: { from: '$loaded', path: 'modelId', as: 'modelId' } },
+    { assert: { on: '$modelId', use: 'expectation' } }
+  ],
   metadata: {
     category: 'model',
     dependency: 'llm',
@@ -205,6 +323,19 @@ export const modelLoadInferredType: TestDefinition = {
   params: {},
   expectation: { validation: 'type', expectedType: 'string' },
   suites: ['smoke'],
+  steps: [
+    { modelSource: { dep: 'llm', as: 'src' } },
+    // Deliberately no modelType: the SDK must infer it from the descriptor.
+    {
+      call: {
+        method: 'loadModel',
+        params: { modelSrc: '$src.modelSrc', modelConfig: { verbosity: 0, ctx_size: 2048 } },
+        as: 'loaded'
+      }
+    },
+    { project: { from: '$loaded', path: 'modelId', as: 'modelId' } },
+    { assert: { on: '$modelId', use: 'expectation' } }
+  ],
   metadata: {
     category: 'model',
     dependency: 'none',
@@ -220,6 +351,19 @@ export const modelLoadMissingTypeStringSrc: TestDefinition = {
     errorContains: 'modelType is required'
   },
   suites: ['smoke'],
+  steps: [
+    // A plain-string modelSrc with no modelType has nothing to infer from, so the SDK must reject
+    // it rather than guess.
+    {
+      callError: {
+        method: 'loadModel',
+        params: { modelSrc: '$params.modelPath' },
+        as: 'err'
+      }
+    },
+    { project: { from: '$err', path: 'message', as: 'message' } },
+    { assert: { on: '$message', use: 'expectation' } }
+  ],
   metadata: {
     category: 'model',
     dependency: 'none',
@@ -231,6 +375,49 @@ export const modelLifecycleNmt: TestDefinition = {
   testId: 'model-lifecycle-nmt',
   params: { text: 'Hello, how are you today?' },
   expectation: { validation: 'type', expectedType: 'string' },
+  steps: [
+    { useModel: { deps: ['bergamot-en-fr'], as: 'first' } },
+    {
+      call: {
+        method: 'translate',
+        collect: 'text',
+        params: { modelId: '$first', text: '$params.text', modelType: 'nmt', stream: false },
+        as: 'run1'
+      }
+    },
+    { project: { from: '$run1', path: 'text', as: 'text1' } },
+    { assert: { on: '$text1', named: 'nonEmptyText' } },
+    { call: { method: 'unloadModel', params: { modelId: '$first' }, as: 'unloaded' } },
+    { modelSource: { dep: 'bergamot-en-fr', as: 'src' } },
+    {
+      call: {
+        method: 'loadModel',
+        params: {
+          modelSrc: '$src.modelSrc',
+          modelType: '$src.modelType',
+          modelConfig: { engine: 'Bergamot', from: 'en', to: 'fr' }
+        },
+        as: 'loaded'
+      }
+    },
+    { project: { from: '$loaded', path: 'modelId', as: 'second' } },
+    {
+      call: {
+        method: 'translate',
+        collect: 'text',
+        params: {
+          modelId: '$second',
+          text: 'Good morning, nice to meet you.',
+          modelType: 'nmt',
+          stream: false
+        },
+        as: 'run2'
+      }
+    },
+    { project: { from: '$run2', path: 'text', as: 'text2' } },
+    { assert: { on: '$text2', named: 'nonEmptyText' } },
+    { assert: { on: '$text2', use: 'expectation' } }
+  ],
   metadata: {
     category: 'model',
     dependency: 'none',

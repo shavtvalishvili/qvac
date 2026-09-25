@@ -60,3 +60,13 @@ export const downloadResilienceTests = [
   downloadResilienceHttpSuspend,
   downloadResilienceHttpSharded
 ]
+
+/** Not runnable on the Python client yet. */
+for (const test of downloadResilienceTests) {
+  if (test.steps || test.skip) continue
+  test.skip = {
+    reason:
+      'the Python client has no body for this: it drives network faults through local HTTP fixtures, which the Python client needs a hand-written body for before this can run there',
+    platforms: ['desktop-python']
+  }
+}
