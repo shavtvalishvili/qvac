@@ -45,6 +45,7 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ### Changed
 
+- Update Whisper to v1.9.4 through `speech-cpp` 2026-09-29, preserving the QVAC seed, BCI windowed-attention and streaming/VAD patches.
 - Parakeet `cancel()` now stops an offline `run()` between long-form encoder
   windows instead of after the whole call.
 - speech-cpp's own Parakeet log lines now reach the JS logger instead of
