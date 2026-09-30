@@ -11,7 +11,6 @@
 #include "../utils/ReasoningUtils.hpp"
 #include "../utils/RecurrentStateSnapshot.hpp"
 #include "../utils/UTF8TokenBuffer.hpp"
-#include "ImagePixelLimit.hpp"
 #include "LlmContext.hpp"
 #include "ReasoningBlockCompactor.hpp"
 #include "SequenceDriver.hpp"
@@ -51,7 +50,7 @@ public:
    */
   MtmdLlmContext(
       common_params& commonParams, common_init_result_ptr llamaInit,
-      uint64_t maxImagePixels = image_pixel_limit::DEFAULT_MAX_PIXELS);
+      uint64_t maxImagePixels);
 
   /// Per-slot driver constructor for the continuous-batching path. Does
   /// not own llama handles or the vision context; `sharedVision` must
@@ -59,8 +58,7 @@ public:
   MtmdLlmContext(
       const common_params& commonParams, const LlmModelContext& shared,
       mtmd_context* sharedVision, llama_seq_id seqId,
-      llama_pos perSeqCtxCeiling = -1,
-      uint64_t maxImagePixels = image_pixel_limit::DEFAULT_MAX_PIXELS);
+      llama_pos perSeqCtxCeiling, uint64_t maxImagePixels);
 
   /**
    * The destructor.

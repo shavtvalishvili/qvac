@@ -91,6 +91,7 @@ LlamaModel::LlamaModel(
           std::move(modelPath),
           std::move(projectionPath),
           std::move(configFilemap)} {
+  // This is an addon admission limit, not a common_params load setting.
   maxImagePixels_ =
       image_pixel_limit::takeMaxPixels(constructionArgs_.configFilemap);
   setInitLoader(InitLoader::LOADER_TYPE::DELAYED);

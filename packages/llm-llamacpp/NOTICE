@@ -6,9 +6,6 @@ respective licenses. @qvac/llm-llamacpp itself is licensed under
 Apache-2.0; bundled dependencies are governed by the licenses
 listed below.
 
-The image-size preflight uses stb_image v2.30 by Sean Barrett and contributors,
-licensed under MIT or the public domain. The source file includes its license.
-
 =========================================================================
 Required Attribution Notices
 =========================================================================
@@ -242,3 +239,5 @@ C++ Dependencies
     https://github.com/nlohmann/json
   qvac-fabric
     https://github.com/tetherto/qvac-fabric-llm.cpp
+  stb_image v2.30 (MIT or public domain)
+    https://github.com/nothings/stb

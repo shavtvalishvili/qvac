@@ -30,6 +30,26 @@ std::vector<uint8_t> pngHeader(uint32_t width, uint32_t height) {
   return png;
 }
 
+std::vector<uint8_t> picHeader(uint16_t width, uint16_t height) {
+  std::vector<uint8_t> pic(128, 0);
+  pic[0] = 0x53;
+  pic[1] = 0x80;
+  pic[2] = 0xf6;
+  pic[3] = 0x34;
+  pic[88] = 'P';
+  pic[89] = 'I';
+  pic[90] = 'C';
+  pic[91] = 'T';
+  pic[92] = static_cast<uint8_t>(width >> 8);
+  pic[93] = static_cast<uint8_t>(width);
+  pic[94] = static_cast<uint8_t>(height >> 8);
+  pic[95] = static_cast<uint8_t>(height);
+  pic[105] = 8;
+  pic[106] = 1;
+  pic[107] = 0xe0;
+  return pic;
+}
+
 void expectRejected(const std::function<void()>& check) {
   try {
     check();
@@ -86,6 +106,29 @@ TEST(ImagePixelLimit, BufferBoundaryAndOverride) {
           overLimit.data(), overLimit.size(), 64'000'000));
 }
 
+TEST(ImagePixelLimit, RejectsPicWhenStbInfoCannotReportDimensions) {
+  const auto small = picHeader(1, 1);
+  const auto oversized = picHeader(65'535, 4'097);
+  EXPECT_NO_THROW(
+      image_pixel_limit::checkBuffer(small.data(), small.size(), 50'000'000));
+  expectRejected([&] {
+    image_pixel_limit::checkBuffer(
+        oversized.data(), oversized.size(), 300'000'000);
+  });
+}
+
+TEST(ImagePixelLimit, PreservesMtmdAudioDispatch) {
+  const std::vector<uint8_t> wav{
+      'R', 'I', 'F', 'F', 0, 0, 0, 0, 'W', 'A', 'V', 'E'};
+  const std::vector<uint8_t> id3{'I', 'D', '3', 0, 0, 0, 0, 0, 0, 0, 0, 0};
+  const std::vector<uint8_t> mp3{0xff, 0xe0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+  const std::vector<uint8_t> flac{'f', 'L', 'a', 'C', 0, 0, 0, 0, 0, 0, 0, 0};
+  for (const auto& audio : {wav, id3, mp3, flac}) {
+    EXPECT_NO_THROW(
+        image_pixel_limit::checkBuffer(audio.data(), audio.size(), 50'000'000));
+  }
+}
+
 TEST(ImagePixelLimit, FileIsRejectedBeforeDecode) {
   const auto path =
       std::filesystem::temp_directory_path() /
@@ -104,5 +147,28 @@ TEST(ImagePixelLimit, FileIsRejectedBeforeDecode) {
   expectRejected(
       [&] { image_pixel_limit::checkFile(path.string(), 50'000'000); });
   EXPECT_NO_THROW(image_pixel_limit::checkFile(path.string(), 300'000'000));
+  EXPECT_EQ(image_pixel_limit::readRegularFile(path.string()), header);
+  const auto pic = picHeader(65'535, 4'097);
+  {
+    std::ofstream out(path, std::ios::binary | std::ios::trunc);
+    ASSERT_TRUE(out.is_open());
+    out.write(
+        reinterpret_cast<const char*>(pic.data()),
+        static_cast<std::streamsize>(pic.size()));
+  }
+  expectRejected(
+      [&] { image_pixel_limit::checkFile(path.string(), 300'000'000); });
   std::filesystem::remove(path);
+}
+
+TEST(ImagePixelLimit, RejectsNonRegularFileBeforeOpening) {
+  EXPECT_THROW(
+      image_pixel_limit::checkFile(
+          std::filesystem::temp_directory_path().string(), 50'000'000),
+      qvac_errors::StatusError);
+#ifndef _WIN32
+  EXPECT_THROW(
+      image_pixel_limit::readRegularFile("/dev/zero"),
+      qvac_errors::StatusError);
+#endif
 }

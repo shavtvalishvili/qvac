@@ -4,8 +4,6 @@
 #include <cassert>
 #include <chrono>
 #include <filesystem>
-#include <fstream>
-#include <iterator>
 #include <system_error>
 
 #include <common/log.h>
@@ -16,6 +14,7 @@
 
 #include "CacheManager.hpp"
 #include "GenerationParamsApply.hpp"
+#include "ImagePixelLimit.hpp"
 #include "MediaLoadOrder.hpp"
 #include "ReasoningRecoveryHelpers.hpp"
 #include "addon/LlmErrors.hpp"
@@ -1397,21 +1396,17 @@ void MtmdLlmContext::loadMedia(const std::string& fname) {
         ADDON_ID, toString(UnableToLoadModel), errorMsg);
   }
 
-  const std::u8string utf8Path(fname.begin(), fname.end());
-  std::ifstream stream(std::filesystem::path(utf8Path), std::ios::binary);
-  if (!stream) {
+  try {
+    loadMedia(image_pixel_limit::readRegularFile(fname));
+  } catch (const qvac_errors::StatusError& error) {
     resetMedia();
-    std::string errorMsg = string_format(
-        "[MtmdLlm] Failed to load media from file: %s\n", fname.c_str());
     throw qvac_errors::StatusError(
         ADDON_ID,
         qvac_errors::general_error::toString(
             qvac_errors::general_error::InvalidArgument),
-        errorMsg);
+        "[MtmdLlm] Failed to load media from file: " + fname + ": " +
+            error.what());
   }
-  const std::vector<uint8_t> media{
-      std::istreambuf_iterator<char>(stream), std::istreambuf_iterator<char>()};
-  loadMedia(media);
 }
 
 void MtmdLlmContext::resetState(bool resetStats) {
