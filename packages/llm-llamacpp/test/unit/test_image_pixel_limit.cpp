@@ -129,6 +129,17 @@ TEST(ImagePixelLimit, PreservesMtmdAudioDispatch) {
   }
 }
 
+TEST(ImagePixelLimit, EmptyBufferReportsEmptyMedia) {
+  try {
+    image_pixel_limit::checkBuffer(nullptr, 0, 50'000'000);
+    FAIL() << "Expected empty media to be rejected";
+  } catch (const qvac_errors::StatusError& error) {
+    EXPECT_NE(
+        std::string(error.what()).find("Media buffer is empty"),
+        std::string::npos);
+  }
+}
+
 TEST(ImagePixelLimit, FileIsRejectedBeforeDecode) {
   const auto path =
       std::filesystem::temp_directory_path() /

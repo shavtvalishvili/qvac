@@ -1396,8 +1396,15 @@ void MtmdLlmContext::loadMedia(const std::string& fname) {
         ADDON_ID, toString(UnableToLoadModel), errorMsg);
   }
 
+  std::vector<uint8_t> media;
   try {
-    loadMedia(image_pixel_limit::readRegularFile(fname));
+    media = image_pixel_limit::readRegularFile(fname);
+  } catch (const qvac_errors::StatusError&) {
+    resetMedia();
+    throw;
+  }
+  try {
+    loadMedia(media);
   } catch (const qvac_errors::StatusError& error) {
     resetMedia();
     throw qvac_errors::StatusError(

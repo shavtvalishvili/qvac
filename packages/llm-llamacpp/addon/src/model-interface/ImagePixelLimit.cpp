@@ -8,6 +8,7 @@
 #include <fstream>
 #include <limits>
 #include <string_view>
+#include <system_error>
 
 #include <inference-addon-cpp/Errors.hpp>
 
@@ -36,7 +37,7 @@ invalidFile(const std::string& path, const std::string& reason) {
 std::filesystem::path utf8FilePath(const std::string& path) {
   try {
     return std::filesystem::path(std::u8string(path.begin(), path.end()));
-  } catch (const std::filesystem::filesystem_error&) {
+  } catch (const std::system_error&) {
     throw invalidFile(path, "Invalid UTF-8 file path");
   }
 }
@@ -172,7 +173,11 @@ uint64_t takeMaxPixels(std::unordered_map<std::string, std::string>& config) {
 
 void checkBuffer(const uint8_t* data, size_t size, uint64_t maxPixels) {
   if (data == nullptr || size == 0) {
-    rejectUnknownDimensions();
+    throw qvac_errors::StatusError(
+        qvac_lib_inference_addon_llama::errors::ADDON_ID,
+        qvac_errors::general_error::toString(
+            qvac_errors::general_error::InvalidArgument),
+        "[ImagePixelLimit] Media buffer is empty");
   }
   // Keep this magic check aligned with mtmd-helper's audio dispatch.
   if (isMtmdAudio(data, size)) {
